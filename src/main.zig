@@ -132,15 +132,16 @@ export fn frame() void {
         .{ 0.0, 0.0, 1.0, 0.0 },
         .{ cam_pos.x, cam_pos.y, cam_pos.z, 1.0 },
     } };
+    _ = translation;
 
-    const view_mat = rotation.mul(translation);
+    const view_mat = rotation; //rotation.mul(translation);
     const params = shader.VsParams{
         .proj_view = proj_mat.mul(view_mat),
         .model = .{ .m = .{
             .{ @cos(time), 0.0, -@sin(time), 0.0 },
             .{ 0.0, 1.0, 0.0, 0.0 },
             .{ @sin(time), 0.0, @cos(time), 0.0 },
-            .{ @sin(time * 2.5), @sin(time), 0.0, 1.0 },
+            .{ @sin(time * 2.5), @sin(time), 12.0 * @sin(time), 1.0 },
         } },
     };
 
