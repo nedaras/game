@@ -1,18 +1,22 @@
-@header const math = @import("../math.zig")
-@ctype mat4 math.Matrix4x4
+@header const m = @import("../math.zig")
+@ctype mat4 m.Mat4
 
 @vs vs
 layout(binding = 0) uniform vs_params {
-    mat4 mvp;
+    mat4 proj_view;
+    mat4 model;
 };
 
-in vec4 position;
+in vec3 pos;
 in vec4 color0;
 
 out vec4 color;
 
 void main() {
-    gl_Position = mvp * position;
+    mat4 mat = proj_view * model;
+    vec4 out0 = vec4(pos, 1.0) * mat;
+
+    gl_Position = vec4(out0.xyz, 1.0);
     color = color0;
 }
 @end
