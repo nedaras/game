@@ -14,9 +14,7 @@ out vec4 color;
 
 void main() {
     mat4 mat = proj_view * model;
-    vec4 out0 = vec4(pos, 1.0) * mat;
-
-    gl_Position = vec4(out0.xyz, 1.0);
+    gl_Position = mat * vec4(pos, 1.0);
     color = color0;
 }
 @end

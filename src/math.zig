@@ -48,13 +48,13 @@ pub const Mat4 = extern struct {
     pub fn mul(self: Mat4, mat: Mat4) Mat4 {
         var ret: Mat4 = undefined;
 
-        for (0..4) |row| {
-            for (0..4) |col| {
-                ret.m[row][col] =
-                    self.m[row][0] * mat.m[0][col] +
-                    self.m[row][1] * mat.m[1][col] +
-                    self.m[row][2] * mat.m[2][col] +
-                    self.m[row][3] * mat.m[3][col];
+        for (0..4) |col| {
+            for (0..4) |row| {
+                ret.m[col][row] =
+                    self.m[0][row] * mat.m[col][0] +
+                    self.m[1][row] * mat.m[col][1] +
+                    self.m[2][row] * mat.m[col][2] +
+                    self.m[3][row] * mat.m[col][3];
             }
         }
 

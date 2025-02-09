@@ -106,43 +106,42 @@ export fn frame() void {
 
     time += @floatCast(app.frameDuration());
 
-    const a = app.widthf() / app.heightf();
-    const f = @tan(std.math.degreesToRadians(90.0 * 0.5));
-    const near = 0.01;
+    const a = app.heightf() / app.widthf();
+    const f = 1.0 / @tan(std.math.degreesToRadians(90.0 * 0.5));
+    const near = 0.1;
     const far = 100.0;
 
     // column-major order
     const proj_mat = Mat4{ .m = .{
-        .{ 1.0 / (a * f), 0.0, 0.0, 0.0 },
-        .{ 0.0, 1.0 / f, 0.0, 0.0 },
-        .{ 0.0, 0.0, -(far + near) / (far - near), -2.0 * far * near / (far - near) },
-        .{ 0.0, 0.0, -1, 0.0 },
+        .{ a * f, 0.0, 0.0, 0.0 },
+        .{ 0.0, f, 0.0, 0.0 },
+        .{ 0.0, 0.0, (far + near) / (far - near), -1.0 },
+        .{ 0.0, 0.0, (2.0 * far * near) / (far - near), 0.0 },
     } };
 
-    const view_mat = Mat4{ .m = .{
-        .{ 0.3, 0.0, 0.0, 0.0 },
-        .{ 0.0, 0.3, 0.0, 0.0 },
-        .{ 0.0, 0.0, 0.3, 0.3 },
-        .{ 0.0, 0.0, 0.0, 1.0 },
-    } };
-
-    const ry = Mat4{ .m = .{
+    const rotation = Mat4{ .m = .{
         .{ 1.0, 0.0, 0.0, 0.0 },
-        .{ 0.0, @cos(time), -@sin(time), 0.0 },
-        .{ 0.0, @sin(time), @cos(time), 0.0 },
-        .{ 0.0, 0.0, 0.0, 1.0 },
-    } };
-
-    const rx = Mat4{ .m = .{
-        .{ @cos(time * 2.5), 0.0, @sin(time * 2.5), 0.0 },
         .{ 0.0, 1.0, 0.0, 0.0 },
-        .{ -@sin(time * 2.5), 0.0, @cos(time * 2.5), 0.0 },
+        .{ 0.0, 0.0, 1.0, 0.0 },
         .{ 0.0, 0.0, 0.0, 1.0 },
     } };
 
+    const translation = Mat4{ .m = .{
+        .{ 1.0, 0.0, 0.0, 0.0 },
+        .{ 0.0, 1.0, 0.0, 0.0 },
+        .{ 0.0, 0.0, 1.0, 0.0 },
+        .{ cam_pos.x, cam_pos.y, cam_pos.z, 1.0 },
+    } };
+
+    const view_mat = rotation.mul(translation);
     const params = shader.VsParams{
         .proj_view = proj_mat.mul(view_mat),
-        .model = ry.mul(rx),
+        .model = .{ .m = .{
+            .{ @cos(time), 0.0, -@sin(time), 0.0 },
+            .{ 0.0, 1.0, 0.0, 0.0 },
+            .{ @sin(time), 0.0, @cos(time), 0.0 },
+            .{ @sin(time * 2.5), @sin(time), 0.0, 1.0 },
+        } },
     };
 
     gfx.applyPipeline(pipe);
@@ -155,11 +154,31 @@ export fn cleanup() void {
     gfx.shutdown();
 }
 
+var cam_pos = Vec3{
+    .x = 0.0,
+    .y = 0.0,
+    .z = 0.0,
+};
+
+export fn input(event: ?*const app.Event) void {
+    const ev = event.?;
+    if (ev.type == .KEY_DOWN) {
+        switch (ev.key_code) {
+            .W => cam_pos.z += 0.25,
+            .S => cam_pos.z -= 0.25,
+            .A => cam_pos.x += 0.25,
+            .D => cam_pos.x -= 0.25,
+            else => {},
+        }
+    }
+}
+
 pub fn main() void {
     app.run(.{
         .init_cb = init,
         .frame_cb = frame,
         .cleanup_cb = cleanup,
+        .event_cb = input,
         .width = 512,
         .height = 512,
         .icon = .{ .sokol_default = true },
