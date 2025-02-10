@@ -1,7 +1,10 @@
 const std = @import("std");
 const math = std.math;
 
-pub const Vec2 = extern struct {};
+pub const Vec2 = extern struct {
+    x: f32,
+    y: f32,
+};
 
 pub const Vec3 = extern struct {
     x: f32,

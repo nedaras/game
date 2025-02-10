@@ -104,7 +104,42 @@ export fn frame() void {
     gfx.beginPass(.{ .swapchain = glue.swapchain() });
     defer gfx.endPass();
 
+    const dt: f32 = @floatCast(app.frameDuration());
     time += @floatCast(app.frameDuration());
+
+    var k_input = Vec2{
+        .x = 0.0,
+        .y = 0.0,
+    };
+
+    if (w_down) k_input.y += 1.0;
+    if (s_down) k_input.y -= 1.0;
+
+    if (a_down) k_input.x += 1.0;
+    if (d_down) k_input.x -= 1.0;
+
+    if (k_input.x != 0.0 or k_input.y != 0.0) {
+        const l = @sqrt(k_input.x * k_input.x + k_input.y * k_input.y);
+        k_input.x /= l;
+        k_input.y /= l;
+    }
+
+    cam_vel.x += k_input.x * dt * 1000.0;
+    cam_vel.z += k_input.y * dt * 1000.0;
+
+    const speed = cam_vel.x * cam_vel.x + cam_vel.y * cam_vel.y + cam_vel.z * cam_vel.z;
+    if (speed > 320.0) {
+        cam_vel.x = (cam_vel.x / speed) * 320.0;
+        cam_vel.z = (cam_vel.z / speed) * 320.0;
+    }
+
+    if (k_input.x == 0.0 and k_input.y == 0.0) {
+        cam_vel.x -= cam_vel.x * 8.0 * dt;
+        cam_vel.z -= cam_vel.z * 8.0 * dt;
+    }
+
+    cam_pos.x += cam_vel.x * dt;
+    cam_pos.z += cam_vel.z * dt;
 
     const a = app.heightf() / app.widthf();
     const f = 1.0 / @tan(std.math.degreesToRadians(90.0 * 0.5));
@@ -132,16 +167,15 @@ export fn frame() void {
         .{ 0.0, 0.0, 1.0, 0.0 },
         .{ cam_pos.x, cam_pos.y, cam_pos.z, 1.0 },
     } };
-    _ = translation;
 
-    const view_mat = rotation; //rotation.mul(translation);
+    const view_mat = rotation.mul(translation);
     const params = shader.VsParams{
         .proj_view = proj_mat.mul(view_mat),
         .model = .{ .m = .{
             .{ @cos(time), 0.0, -@sin(time), 0.0 },
             .{ 0.0, 1.0, 0.0, 0.0 },
             .{ @sin(time), 0.0, @cos(time), 0.0 },
-            .{ @sin(time * 2.5), @sin(time), 12.0 * @sin(time), 1.0 },
+            .{ @sin(time * 2.5), @sin(time), -8.0, 1.0 },
         } },
     };
 
@@ -161,14 +195,27 @@ var cam_pos = Vec3{
     .z = 0.0,
 };
 
+var cam_vel = Vec3{
+    .x = 0.0,
+    .y = 0.0,
+    .z = 0.0,
+};
+
+var w_down = false;
+var a_down = false;
+var s_down = false;
+var d_down = false;
+
 export fn input(event: ?*const app.Event) void {
     const ev = event.?;
-    if (ev.type == .KEY_DOWN) {
+    if (ev.type == .KEY_DOWN or ev.type == .KEY_UP) {
+        const down = ev.type == .KEY_DOWN;
+
         switch (ev.key_code) {
-            .W => cam_pos.z += 0.25,
-            .S => cam_pos.z -= 0.25,
-            .A => cam_pos.x += 0.25,
-            .D => cam_pos.x -= 0.25,
+            .W => w_down = down,
+            .S => s_down = down,
+            .A => a_down = down,
+            .D => d_down = down,
             else => {},
         }
     }
