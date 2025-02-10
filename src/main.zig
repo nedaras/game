@@ -150,8 +150,8 @@ export fn frame() void {
     const proj_mat = Mat4{ .m = .{
         .{ a * f, 0.0, 0.0, 0.0 },
         .{ 0.0, f, 0.0, 0.0 },
-        .{ 0.0, 0.0, (far + near) / (far - near), -1.0 },
-        .{ 0.0, 0.0, (2.0 * far * near) / (far - near), 0.0 },
+        .{ 0.0, 0.0, (far + near) / (near - far), -1.0 },
+        .{ 0.0, 0.0, (2.0 * far * near) / (near - far), 0.0 },
     } };
 
     const rotation = Mat4{ .m = .{
@@ -161,21 +161,23 @@ export fn frame() void {
         .{ 0.0, 0.0, 0.0, 1.0 },
     } };
 
-    const translation = Mat4{ .m = .{
-        .{ 1.0, 0.0, 0.0, 0.0 },
-        .{ 0.0, 1.0, 0.0, 0.0 },
-        .{ 0.0, 0.0, 1.0, 0.0 },
-        .{ cam_pos.x, cam_pos.y, cam_pos.z, 1.0 },
-    } };
+    const translation = Mat4{
+        .m = .{
+            .{ 1.0, 0.0, 0.0, 0.0 },
+            .{ 0.0, 1.0, 0.0, 0.0 },
+            .{ 0.0, 0.0, 1.0, 0.0 },
+            .{ cam_pos.x, 0.0, cam_pos.z - 6.0, 1.0 },
+        },
+    };
 
     const view_mat = rotation.mul(translation);
     const params = shader.VsParams{
         .proj_view = proj_mat.mul(view_mat),
         .model = .{ .m = .{
-            .{ @cos(time), 0.0, -@sin(time), 0.0 },
-            .{ 0.0, 1.0, 0.0, 0.0 },
-            .{ @sin(time), 0.0, @cos(time), 0.0 },
-            .{ @sin(time * 2.5), @sin(time), -8.0, 1.0 },
+            .{ 1.0, 0.0, 0.0, 0.0 },
+            .{ 0.0, @cos(time), @sin(time), 0.0 },
+            .{ 0.0, -@sin(time), @cos(time), 0.0 },
+            .{ 0.0, 0.0, 0.0, 1.0 },
         } },
     };
 
