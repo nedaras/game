@@ -2,6 +2,8 @@ const std = @import("std");
 const sokol = @import("sokol");
 const shader = @import("shaders/shader.glsl.zig");
 const math = @import("math.zig");
+const vec = @import("vec.zig");
+const mat = @import("mat.zig");
 
 const gfx = sokol.gfx;
 const app = sokol.app;
@@ -14,6 +16,11 @@ const Mat4 = math.Mat4;
 
 var bind = gfx.Bindings{};
 var pipe = gfx.Pipeline{};
+
+const state = struct {
+    var player_vel = vec.zero(3);
+    var player_pos = vec.zero(3);
+};
 
 export fn init() void {
     gfx.setup(.{
@@ -56,7 +63,7 @@ export fn init() void {
     });
 
     bind.index_buffer = gfx.makeBuffer(.{
-        .type = .INDEXBUFFER,
+        .usage = .{ .index_buffer = true },
         .data = gfx.asRange(&[_]u16{ // CW
             0,  2,  1,
             2,  3,  1,
@@ -93,8 +100,10 @@ export fn init() void {
         },
         .cull_mode = .BACK,
     });
+}
 
-    std.debug.print("Backend: {}\n", .{gfx.queryBackend()});
+inline fn floatFromBool(comptime T: type, value: bool) T {
+    return @floatFromInt(@intFromBool(value));
 }
 
 var time: f32 = 0;
@@ -107,39 +116,29 @@ export fn frame() void {
     const dt: f32 = @floatCast(app.frameDuration());
     time += @floatCast(app.frameDuration());
 
-    var k_input = Vec2{
-        .x = 0.0,
-        .y = 0.0,
-    };
+    var input = vec.new(.{
+        floatFromBool(f32, a_down) - floatFromBool(f32, d_down),
+        0.0,
+        floatFromBool(f32, w_down) - floatFromBool(f32, s_down),
+    });
 
-    if (w_down) k_input.y += 1.0;
-    if (s_down) k_input.y -= 1.0;
-
-    if (a_down) k_input.x += 1.0;
-    if (d_down) k_input.x -= 1.0;
-
-    if (k_input.x != 0.0 or k_input.y != 0.0) {
-        const l = @sqrt(k_input.x * k_input.x + k_input.y * k_input.y);
-        k_input.x /= l;
-        k_input.y /= l;
+    if (!vec.eql(input, vec.zero(3))) {
+        const inv_l = vec.invLen(input);
+        input *= vec.fill(3, inv_l);
     }
 
-    cam_vel.x += k_input.x * dt * 1000.0;
-    cam_vel.z += k_input.y * dt * 1000.0;
+    state.player_vel += input * vec.fill(3, dt * 1000.0);
 
-    const speed = cam_vel.x * cam_vel.x + cam_vel.y * cam_vel.y + cam_vel.z * cam_vel.z;
+    const speed = vec.len2(state.player_vel);
     if (speed > 320.0) {
-        cam_vel.x = (cam_vel.x / speed) * 320.0;
-        cam_vel.z = (cam_vel.z / speed) * 320.0;
+        state.player_vel = state.player_vel / vec.fill(3, speed) * vec.fill(3, 320.0);
     }
 
-    if (k_input.x == 0.0 and k_input.y == 0.0) {
-        cam_vel.x -= cam_vel.x * 8.0 * dt;
-        cam_vel.z -= cam_vel.z * 8.0 * dt;
+    if (vec.eql(input, vec.zero(3))) {
+        state.player_vel -= state.player_vel * vec.fill(3, 8.0 * dt);
     }
 
-    cam_pos.x += cam_vel.x * dt;
-    cam_pos.z += cam_vel.z * dt;
+    state.player_pos += state.player_vel * vec.fill(3, dt);
 
     const a = app.heightf() / app.widthf();
     const f = 1.0 / @tan(std.math.degreesToRadians(90.0 * 0.5));
@@ -154,6 +153,13 @@ export fn frame() void {
         .{ 0.0, 0.0, (2.0 * far * near) / (near - far), 0.0 },
     } };
 
+    const pm = mat.new(.{
+        .{ a * f, 0.0 },
+        .{ 0.0, 1.0 },
+        .{ 0.0, 1.0 },
+    });
+    std.debug.print("{d}\n", .{pm.mat});
+
     const rotation = Mat4{ .m = .{
         .{ 1.0, 0.0, 0.0, 0.0 },
         .{ 0.0, 1.0, 0.0, 0.0 },
@@ -161,14 +167,12 @@ export fn frame() void {
         .{ 0.0, 0.0, 0.0, 1.0 },
     } };
 
-    const translation = Mat4{
-        .m = .{
-            .{ 1.0, 0.0, 0.0, 0.0 },
-            .{ 0.0, 1.0, 0.0, 0.0 },
-            .{ 0.0, 0.0, 1.0, 0.0 },
-            .{ cam_pos.x, 0.0, cam_pos.z - 6.0, 1.0 },
-        },
-    };
+    const translation = Mat4{ .m = .{
+        .{ 1.0, 0.0, 0.0, 0.0 },
+        .{ 0.0, 1.0, 0.0, 0.0 },
+        .{ 0.0, 0.0, 1.0, 0.0 },
+        .{ state.player_pos[vec.x], 0.0, state.player_pos[vec.z] - 6.0, 1.0 },
+    } };
 
     const view_mat = rotation.mul(translation);
     const params = shader.VsParams{
@@ -191,25 +195,13 @@ export fn cleanup() void {
     gfx.shutdown();
 }
 
-var cam_pos = Vec3{
-    .x = 0.0,
-    .y = 0.0,
-    .z = 0.0,
-};
-
-var cam_vel = Vec3{
-    .x = 0.0,
-    .y = 0.0,
-    .z = 0.0,
-};
-
 var w_down = false;
 var a_down = false;
 var s_down = false;
 var d_down = false;
 
-export fn input(event: ?*const app.Event) void {
-    const ev = event.?;
+export fn event(e: ?*const app.Event) void {
+    const ev = e.?;
     if (ev.type == .KEY_DOWN or ev.type == .KEY_UP) {
         const down = ev.type == .KEY_DOWN;
 
@@ -228,9 +220,9 @@ pub fn main() void {
         .init_cb = init,
         .frame_cb = frame,
         .cleanup_cb = cleanup,
-        .event_cb = input,
-        .width = 512,
-        .height = 512,
+        .event_cb = event,
+        .width = 640,
+        .height = 480,
         .icon = .{ .sokol_default = true },
         .window_title = "game",
         .logger = .{ .func = sokol.log.func },
