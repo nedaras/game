@@ -112,29 +112,32 @@ export fn frame() void {
 
     var input = vec.new(.{
         floatFromBool(f32, a_down) - floatFromBool(f32, d_down),
-        0.0,
         floatFromBool(f32, w_down) - floatFromBool(f32, s_down),
     });
 
-    if (!vec.eql(input, vec.zero(3))) {
+    if (!vec.eql(input, vec.zero(2))) {
         const inv_l = vec.invLen(input);
-        input *= vec.fill(3, inv_l);
+        input *= vec.fill(2, inv_l);
     }
 
-    state.player_vel += input * vec.fill(3, dt * 640.0);
+    const forward = vec.new(.{
+        input[vec.x] * @cos(yaw) - input[vec.y] * @sin(yaw),
+        0.0,
+        input[vec.x] * @sin(yaw) + input[vec.y] * @cos(yaw),
+    });
+
+    state.player_vel += forward * vec.fill(3, dt * 640.0);
 
     const speed = vec.len2(state.player_vel);
     if (speed > 280.0) {
         state.player_vel = state.player_vel / vec.fill(3, speed) * vec.fill(3, 280.0);
     }
 
-    if (vec.eql(input, vec.zero(3))) {
+    if (vec.eql(input, vec.zero(2))) {
         state.player_vel -= state.player_vel * vec.fill(3, 12.0 * dt);
     }
 
     state.player_pos += state.player_vel * vec.fill(3, dt);
-
-    std.debug.print("{d}\n", .{1.0 / app.frameDuration()});
 
     const a = app.heightf() / app.widthf();
     const f = 1.0 / @tan(std.math.degreesToRadians(90.0 * 0.5));
@@ -149,9 +152,9 @@ export fn frame() void {
     });
 
     const rotatiom = mat.new(.{
-        .{ 1.0, 0.0, 0.0, 0.0 },
+        .{ @cos(yaw), 0.0, -@sin(yaw), 0.0 },
         .{ 0.0, 1.0, 0.0, 0.0 },
-        .{ 0.0, 0.0, 1.0, 0.0 },
+        .{ @sin(yaw), 0.0, @cos(yaw), 0.0 },
         .{ 0.0, 0.0, 0.0, 1.0 },
     });
 
@@ -168,8 +171,8 @@ export fn frame() void {
         .proj_view = mat.mul(proj_mat, view_mat).mat,
         .model = .{
             .{ 1.0, 0.0, 0.0, 0.0 },
-            .{ 0.0, @cos(time), @sin(time), 0.0 },
-            .{ 0.0, -@sin(time), @cos(time), 0.0 },
+            .{ 0.0, 1.0, 0.0, 0.0 },
+            .{ 0.0, 0.0, 1.0, 0.0 },
             .{ 0.0, 0.0, 0.0, 1.0 },
         },
     };
@@ -189,8 +192,18 @@ var a_down = false;
 var s_down = false;
 var d_down = false;
 
+var yaw: f32 = 0.0;
+var pitch: f32 = 0.0;
+
 export fn event(e: ?*const app.Event) void {
     const ev = e.?;
+    yaw += ev.mouse_dx * 0.002;
+    pitch += ev.mouse_dy * 0.002;
+
+    if (ev.type == .MOUSE_ENTER) {
+        app.lockMouse(true);
+    }
+
     if (ev.type == .KEY_DOWN or ev.type == .KEY_UP) {
         const down = ev.type == .KEY_DOWN;
 
@@ -213,7 +226,7 @@ pub fn main() void {
         .width = 640,
         .height = 480,
         .icon = .{ .sokol_default = true },
-        .window_title = "game",
+        .window_title = "rizz",
         .logger = .{ .func = sokol.log.func },
         .win32_console_attach = true,
     });
