@@ -1,6 +1,5 @@
 const sg = @import("sokol").gfx;
 const std = @import("std");
-const m = @import("../math.zig");
 //
 //    #version:1# (machine generated, don't edit!)
 //
@@ -27,8 +26,8 @@ pub const ATTR_game_pos = 0;
 pub const ATTR_game_color0 = 1;
 pub const UB_vs_params = 0;
 pub const VsParams = extern struct {
-    proj_view: m.Mat4 align(16),
-    model: m.Mat4 align(1),
+    proj_view: [4][4]f32 align(16),
+    model: [4][4]f32 align(1),
 };
 //
 //    #version 410

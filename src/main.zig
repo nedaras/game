@@ -1,18 +1,12 @@
 const std = @import("std");
 const sokol = @import("sokol");
 const shader = @import("shaders/shader.glsl.zig");
-const math = @import("math.zig");
 const vec = @import("vec.zig");
 const mat = @import("mat.zig");
 
 const gfx = sokol.gfx;
 const app = sokol.app;
 const glue = sokol.glue;
-
-const Vec2 = math.Vec2;
-const Vec3 = math.Vec3;
-const Mat3 = math.Mat3;
-const Mat4 = math.Mat4;
 
 var bind = gfx.Bindings{};
 var pipe = gfx.Pipeline{};
@@ -127,15 +121,15 @@ export fn frame() void {
         input *= vec.fill(3, inv_l);
     }
 
-    state.player_vel += input * vec.fill(3, dt * 1000.0);
+    state.player_vel += input * vec.fill(3, dt * 640.0);
 
     const speed = vec.len2(state.player_vel);
-    if (speed > 320.0) {
-        state.player_vel = state.player_vel / vec.fill(3, speed) * vec.fill(3, 320.0);
+    if (speed > 280.0) {
+        state.player_vel = state.player_vel / vec.fill(3, speed) * vec.fill(3, 280.0);
     }
 
     if (vec.eql(input, vec.zero(3))) {
-        state.player_vel -= state.player_vel * vec.fill(3, 8.0 * dt);
+        state.player_vel -= state.player_vel * vec.fill(3, 12.0 * dt);
     }
 
     state.player_pos += state.player_vel * vec.fill(3, dt);
@@ -145,44 +139,37 @@ export fn frame() void {
     const near = 0.1;
     const far = 100.0;
 
-    // column-major order
-    const proj_mat = Mat4{ .m = .{
+    const proj_mat = mat.new(.{
         .{ a * f, 0.0, 0.0, 0.0 },
         .{ 0.0, f, 0.0, 0.0 },
         .{ 0.0, 0.0, (far + near) / (near - far), -1.0 },
         .{ 0.0, 0.0, (2.0 * far * near) / (near - far), 0.0 },
-    } };
-
-    const pm = mat.new(.{
-        .{ a * f, 0.0 },
-        .{ 0.0, 1.0 },
-        .{ 0.0, 1.0 },
     });
-    std.debug.print("{d}\n", .{pm.mat});
 
-    const rotation = Mat4{ .m = .{
+    const rotatiom = mat.new(.{
         .{ 1.0, 0.0, 0.0, 0.0 },
         .{ 0.0, 1.0, 0.0, 0.0 },
         .{ 0.0, 0.0, 1.0, 0.0 },
         .{ 0.0, 0.0, 0.0, 1.0 },
-    } };
+    });
 
-    const translation = Mat4{ .m = .{
+    const translation = mat.new(.{
         .{ 1.0, 0.0, 0.0, 0.0 },
         .{ 0.0, 1.0, 0.0, 0.0 },
         .{ 0.0, 0.0, 1.0, 0.0 },
-        .{ state.player_pos[vec.x], 0.0, state.player_pos[vec.z] - 6.0, 1.0 },
-    } };
+        .{ state.player_pos[vec.x], state.player_pos[vec.y], state.player_pos[vec.z] - 6.0, 1.0 },
+    });
 
-    const view_mat = rotation.mul(translation);
+    const view_mat = mat.mul(rotatiom, translation);
+
     const params = shader.VsParams{
-        .proj_view = proj_mat.mul(view_mat),
-        .model = .{ .m = .{
+        .proj_view = mat.mul(proj_mat, view_mat).mat,
+        .model = .{
             .{ 1.0, 0.0, 0.0, 0.0 },
             .{ 0.0, @cos(time), @sin(time), 0.0 },
             .{ 0.0, -@sin(time), @cos(time), 0.0 },
             .{ 0.0, 0.0, 0.0, 1.0 },
-        } },
+        },
     };
 
     gfx.applyPipeline(pipe);
