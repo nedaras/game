@@ -134,6 +134,8 @@ export fn frame() void {
 
     state.player_pos += state.player_vel * vec.fill(3, dt);
 
+    std.debug.print("{d}\n", .{1.0 / app.frameDuration()});
+
     const a = app.heightf() / app.widthf();
     const f = 1.0 / @tan(std.math.degreesToRadians(90.0 * 0.5));
     const near = 0.1;
