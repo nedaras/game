@@ -3,6 +3,7 @@ const sokol = @import("sokol");
 const shader = @import("shaders/shader.glsl.zig");
 const vec = @import("vec.zig");
 const mat = @import("mat.zig");
+const quat = @import("quat.zig");
 
 const gfx = sokol.gfx;
 const app = sokol.app;
@@ -111,8 +112,8 @@ export fn frame() void {
     time += @floatCast(app.frameDuration());
 
     var input = vec.new(.{
-        floatFromBool(f32, a_down) - floatFromBool(f32, d_down),
-        floatFromBool(f32, w_down) - floatFromBool(f32, s_down),
+        floatFromBool(f32, d_down) - floatFromBool(f32, a_down),
+        floatFromBool(f32, s_down) - floatFromBool(f32, w_down),
     });
 
     if (!vec.eql(input, vec.zero(2))) {
@@ -138,6 +139,7 @@ export fn frame() void {
     }
 
     state.player_pos += state.player_vel * vec.fill(3, dt);
+    std.debug.print("{d:.3} {d:.3} {d:.3}\n", .{ state.player_pos[vec.x], state.player_pos[vec.y], state.player_pos[vec.z] });
 
     const a = app.heightf() / app.widthf();
     const f = 1.0 / @tan(std.math.degreesToRadians(90.0 * 0.5));
@@ -151,30 +153,20 @@ export fn frame() void {
         .{ 0.0, 0.0, (2.0 * far * near) / (near - far), 0.0 },
     });
 
-    const rotatiom = mat.new(.{
-        .{ @cos(yaw), 0.0, -@sin(yaw), 0.0 },
-        .{ 0.0, 1.0, 0.0, 0.0 },
-        .{ @sin(yaw), 0.0, @cos(yaw), 0.0 },
-        .{ 0.0, 0.0, 0.0, 1.0 },
-    });
+    const yaw_quat = quat.new(.{ 0.0, @sin(yaw * 0.5), 0.0, @cos(yaw * 0.5) });
+    const pitch_quat = quat.new(.{ @sin(pitch * 0.5), 0.0, 0.0, @cos(pitch * 0.5) });
 
+    const rotation = quat.mul(pitch_quat, yaw_quat);
     const translation = mat.new(.{
         .{ 1.0, 0.0, 0.0, 0.0 },
         .{ 0.0, 1.0, 0.0, 0.0 },
         .{ 0.0, 0.0, 1.0, 0.0 },
-        .{ state.player_pos[vec.x], state.player_pos[vec.y], state.player_pos[vec.z] - 6.0, 1.0 },
+        .{ -state.player_pos[vec.x], -state.player_pos[vec.y], -(state.player_pos[vec.z] + 6), 1.0 },
     });
 
-    const view_mat = mat.mul(rotatiom, translation);
-
+    const view_mat = mat.mul(quat.toMat(quat.inv(rotation)), translation);
     const params = shader.VsParams{
-        .proj_view = mat.mul(proj_mat, view_mat).mat,
-        .model = .{
-            .{ 1.0, 0.0, 0.0, 0.0 },
-            .{ 0.0, 1.0, 0.0, 0.0 },
-            .{ 0.0, 0.0, 1.0, 0.0 },
-            .{ 0.0, 0.0, 0.0, 1.0 },
-        },
+        .view_proj = mat.mul(proj_mat, view_mat).mat,
     };
 
     gfx.applyPipeline(pipe);
@@ -198,7 +190,7 @@ var pitch: f32 = 0.0;
 export fn event(e: ?*const app.Event) void {
     const ev = e.?;
     yaw += ev.mouse_dx * 0.002;
-    pitch += ev.mouse_dy * 0.002;
+    pitch = @max(@min(pitch + ev.mouse_dy * 0.002, std.math.degreesToRadians(90)), std.math.degreesToRadians(-90));
 
     if (ev.type == .MOUSE_ENTER) {
         app.lockMouse(true);

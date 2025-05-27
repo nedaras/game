@@ -6,7 +6,7 @@ pub fn Mat(comptime R: comptime_int, comptime C: comptime_int) type {
         comptime rows: comptime_int = R,
         comptime cols: comptime_int = C,
 
-        mat: [R][C]f32
+        mat: [R][C]f32,
     };
 }
 
@@ -23,22 +23,23 @@ fn matrixCols(comptime MatrixType: type) comptime_int {
 }
 
 pub inline fn new(args: anytype) Mat(matrixRows(@TypeOf(args)), matrixCols(@TypeOf(args))) {
-    return .{ .mat = args, };
+    return .{
+        .mat = args,
+    };
 }
 
 pub fn mul(a: anytype, b: anytype) Mat(a.rows, b.cols) {
     @branchHint(.likely);
     @setRuntimeSafety(false);
 
-    // todo: would be nice to simd or becnh this idk smth would be nice
     var out: Mat(a.rows, b.cols) = .{ .mat = undefined };
-    inline for (0..b.cols) |i| {
-        inline for (0..a.rows) |j| {
+    inline for (0..b.cols) |j| {
+        inline for (0..a.rows) |i| {
             var sum: f32 = 0.0;
             inline for (0..a.cols) |k| {
-                sum += a.mat[k][j] * b.mat[i][k];
+                sum += a.mat[k][i] * b.mat[j][k];
             }
-            out.mat[i][j] = sum;
+            out.mat[j][i] = sum;
         }
     }
     return out;
