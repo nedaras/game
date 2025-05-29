@@ -40,7 +40,9 @@ pub fn toMat(quat: @Vector(4, f32)) mat.Mat(4, 4) {
     });
 }
 
-pub inline fn mul(a: @Vector(4, f32), b: @Vector(4, f32)) @Vector(4, f32) { // tofo: cmon simd
+pub fn mul(a: @Vector(4, f32), b: @Vector(4, f32)) @Vector(4, f32) { // tofo: cmon simd
+    @setRuntimeSafety(false);
+
     return .{
         a[w] * b[x] + a[x] * b[w] + a[y] * b[z] - a[z] * b[y],
         a[w] * b[y] - a[x] * b[z] + a[y] * b[w] + a[z] * b[x],

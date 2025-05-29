@@ -1,4 +1,5 @@
 const std = @import("std");
+const math = std.math;
 const sokol = @import("sokol");
 const shader = @import("shaders/shader.glsl.zig");
 const vec = @import("vec.zig");
@@ -12,9 +13,19 @@ const glue = sokol.glue;
 var bind = gfx.Bindings{};
 var pipe = gfx.Pipeline{};
 
+const Vertex = extern struct {
+    x: f32,
+    y: f32,
+    z: f32,
+    color: u32,
+};
+
+const Square = [4]Vertex;
+
 const state = struct {
-    var player_vel = vec.zero(3);
-    var player_pos = vec.zero(3);
+    var cam_vel = vec.zero(3);
+    var cam_pos = vec.new(.{ 0.0, 0.0, 6.0 });
+    var plane: [10 * 10]Square = undefined;
 };
 
 export fn init() void {
@@ -23,61 +34,54 @@ export fn init() void {
         .logger = .{ .func = sokol.log.func },
     });
 
+    // this all is goofy
+    // it shouldnt be squares just points on which we draw triangles and index them
+
+    for (0..10) |z| {
+        for (0..10) |x| {
+            const off_x = 2.0 * @as(f32, @floatFromInt(x));
+            const off_z = 2.0 * @as(f32, @floatFromInt(z));
+            state.plane[z * 10 + x] = .{
+                .{ .x = -1.0 + off_x, .y = 0.0, .z = 1.0 + off_z, .color = 0xFF0000FF },
+                .{ .x = 1.0 + off_x, .y = 0.0, .z = 1.0 + off_z, .color = 0xFF00FF00 },
+                .{ .x = -1.0 + off_x, .y = 0.0, .z = -1.0 + off_z, .color = 0xFFFF0000 },
+                .{ .x = 1.0 + off_x, .y = 0.0, .z = -1.0 + off_z, .color = 0xFF000000 },
+            };
+        }
+    }
+
+    var indxs: [100 * 6]u16 = undefined;
+    for (0..100) |i| {
+        const idx = i * 6;
+        indxs[idx + 0] = @intCast(i * 4 + 0);
+        indxs[idx + 1] = @intCast(i * 4 + 2);
+        indxs[idx + 2] = @intCast(i * 4 + 1);
+        indxs[idx + 3] = @intCast(i * 4 + 2);
+        indxs[idx + 4] = @intCast(i * 4 + 3);
+        indxs[idx + 5] = @intCast(i * 4 + 1);
+    }
+
     bind.vertex_buffers[0] = gfx.makeBuffer(.{
-        .data = gfx.asRange(&[_]f32{
-            -1.0, -1.0, 1.0,  1.0, 0.0, 0.0, 1.0,
-            1.0,  -1.0, 1.0,  0.0, 1.0, 0.0, 1.0,
-            -1.0, 1.0,  1.0,  0.0, 0.0, 1.0, 1.0,
-            1.0,  1.0,  1.0,  0.0, 0.0, 0.0, 1.0,
-
-            -1.0, 1.0,  -1.0, 1.0, 0.0, 0.0, 1.0,
-            1.0,  1.0,  -1.0, 0.0, 1.0, 0.0, 1.0,
-            -1.0, -1.0, -1.0, 0.0, 0.0, 1.0, 1.0,
-            1.0,  -1.0, -1.0, 0.0, 0.0, 0.0, 1.0,
-
-            -1.0, 1.0,  1.0,  1.0, 0.0, 0.0, 1.0,
-            1.0,  1.0,  1.0,  0.0, 1.0, 0.0, 1.0,
-            -1.0, 1.0,  -1.0, 0.0, 0.0, 1.0, 1.0,
-            1.0,  1.0,  -1.0, 0.0, 0.0, 0.0, 1.0,
-
-            -1.0, -1.0, -1.0, 1.0, 0.0, 0.0, 1.0,
-            1.0,  -1.0, -1.0, 0.0, 1.0, 0.0, 1.0,
-            -1.0, -1.0, 1.0,  0.0, 0.0, 1.0, 1.0,
-            1.0,  -1.0, 1.0,  0.0, 0.0, 0.0, 1.0,
-
-            1.0,  -1.0, 1.0,  1.0, 0.0, 0.0, 1.0,
-            1.0,  -1.0, -1.0, 0.0, 1.0, 0.0, 1.0,
-            1.0,  1.0,  1.0,  0.0, 0.0, 1.0, 1.0,
-            1.0,  1.0,  -1.0, 0.0, 0.0, 0.0, 1.0,
-
-            -1.0, -1.0, -1.0, 1.0, 0.0, 0.0, 1.0,
-            -1.0, -1.0, 1.0,  0.0, 1.0, 0.0, 1.0,
-            -1.0, 1.0,  -1.0, 0.0, 0.0, 1.0, 1.0,
-            -1.0, 1.0,  1.0,  0.0, 0.0, 0.0, 1.0,
-        }),
+        .usage = .{ .stream_update = true },
+        .size = state.plane.len * @sizeOf(Square),
     });
 
     bind.index_buffer = gfx.makeBuffer(.{
         .usage = .{ .index_buffer = true },
-        .data = gfx.asRange(&[_]u16{ // CW
-            0,  2,  1,
-            2,  3,  1,
+        .data = gfx.asRange(&indxs),
+        //.data = gfx.asRange(&[_]u16{ // CW
+            //0,  2,  1,
+            //2,  3,  1,
 
-            4,  6,  5,
-            6,  7,  5,
+            //4,  6,  5,
+            //6,  7,  5,
 
-            8,  10, 9,
-            10, 11, 9,
+            //8,  10, 9,
+            //10, 11, 9,
 
-            12, 14, 13,
-            14, 15, 13,
-
-            16, 18, 17,
-            18, 19, 17,
-
-            20, 22, 21,
-            22, 23, 21,
-        }),
+            //12, 14, 13,
+            //14, 15, 13,
+        //}),
     });
 
     pipe = gfx.makePipeline(.{
@@ -85,7 +89,7 @@ export fn init() void {
         .layout = blk: {
             var l = gfx.VertexLayoutState{};
             l.attrs[shader.ATTR_game_pos].format = .FLOAT3;
-            l.attrs[shader.ATTR_game_color0].format = .FLOAT4;
+            l.attrs[shader.ATTR_game_color0].format = .UBYTE4N;
             break :blk l;
         },
         .index_type = .UINT16,
@@ -101,7 +105,6 @@ inline fn floatFromBool(comptime T: type, value: bool) T {
     return @floatFromInt(@intFromBool(value));
 }
 
-var time: f32 = 0;
 export fn frame() void {
     defer gfx.commit();
 
@@ -109,7 +112,6 @@ export fn frame() void {
     defer gfx.endPass();
 
     const dt: f32 = @floatCast(app.frameDuration());
-    time += @floatCast(app.frameDuration());
 
     var input = vec.new(.{
         floatFromBool(f32, d_down) - floatFromBool(f32, a_down),
@@ -127,22 +129,21 @@ export fn frame() void {
         input[vec.x] * @sin(yaw) + input[vec.y] * @cos(yaw),
     });
 
-    state.player_vel += forward * vec.fill(3, dt * 640.0);
+    state.cam_vel += forward * vec.fill(3, dt * 640.0);
 
-    const speed = vec.len2(state.player_vel);
+    const speed = vec.len2(state.cam_vel);
     if (speed > 280.0) {
-        state.player_vel = state.player_vel / vec.fill(3, speed) * vec.fill(3, 280.0);
+        state.cam_vel = state.cam_vel / vec.fill(3, speed) * vec.fill(3, 280.0);
     }
 
     if (vec.eql(input, vec.zero(2))) {
-        state.player_vel -= state.player_vel * vec.fill(3, 12.0 * dt);
+        state.cam_vel -= state.cam_vel * vec.fill(3, 12.0 * dt);
     }
 
-    state.player_pos += state.player_vel * vec.fill(3, dt);
-    std.debug.print("{d:.3} {d:.3} {d:.3}\n", .{ state.player_pos[vec.x], state.player_pos[vec.y], state.player_pos[vec.z] });
+    state.cam_pos += state.cam_vel * vec.fill(3, dt);
 
     const a = app.heightf() / app.widthf();
-    const f = 1.0 / @tan(std.math.degreesToRadians(90.0 * 0.5));
+    const f = 1.0 / @tan(math.degreesToRadians(90.0 * 0.5));
     const near = 0.1;
     const far = 100.0;
 
@@ -161,18 +162,23 @@ export fn frame() void {
         .{ 1.0, 0.0, 0.0, 0.0 },
         .{ 0.0, 1.0, 0.0, 0.0 },
         .{ 0.0, 0.0, 1.0, 0.0 },
-        .{ -state.player_pos[vec.x], -state.player_pos[vec.y], -(state.player_pos[vec.z] + 6), 1.0 },
+        .{ -state.cam_pos[vec.x], -state.cam_pos[vec.y], -state.cam_pos[vec.z], 1.0 },
     });
 
     const view_mat = mat.mul(quat.toMat(quat.inv(rotation)), translation);
-    const params = shader.VsParams{
-        .view_proj = mat.mul(proj_mat, view_mat).mat,
-    };
+    const params = shader.VsParams{ .view_proj = mat.mul(proj_mat, view_mat).mat, .model = .{
+        .{ 1.0, 0.0, 0.0, 0.0 },
+        .{ 0.0, 1.0, 0.0, 0.0 },
+        .{ 0.0, 0.0, 1.0, 0.0 },
+        .{ 0.0, -2.0, 0.0, 1.0 },
+    } };
+
+    gfx.updateBuffer(bind.vertex_buffers[0], gfx.asRange(&state.plane));
 
     gfx.applyPipeline(pipe);
     gfx.applyBindings(bind);
     gfx.applyUniforms(shader.UB_vs_params, gfx.asRange(&params));
-    gfx.draw(0, 36, 1);
+    gfx.draw(0, state.plane.len * @sizeOf(Square), 1);
 }
 
 export fn cleanup() void {
@@ -188,24 +194,26 @@ var yaw: f32 = 0.0;
 var pitch: f32 = 0.0;
 
 export fn event(e: ?*const app.Event) void {
-    const ev = e.?;
-    yaw += ev.mouse_dx * 0.002;
-    pitch = @max(@min(pitch + ev.mouse_dy * 0.002, std.math.degreesToRadians(90)), std.math.degreesToRadians(-90));
-
-    if (ev.type == .MOUSE_ENTER) {
-        app.lockMouse(true);
-    }
-
-    if (ev.type == .KEY_DOWN or ev.type == .KEY_UP) {
-        const down = ev.type == .KEY_DOWN;
-
-        switch (ev.key_code) {
-            .W => w_down = down,
-            .S => s_down = down,
-            .A => a_down = down,
-            .D => d_down = down,
-            else => {},
-        }
+    const ev = e orelse return;
+    switch (ev.type) {
+        .MOUSE_MOVE => {
+            yaw += ev.mouse_dx * 0.002;
+            pitch = @max(@min(pitch + ev.mouse_dy * 0.002, math.degreesToRadians(90)), math.degreesToRadians(-90));
+        },
+        .MOUSE_ENTER => {
+            app.lockMouse(true);
+        },
+        .KEY_DOWN, .KEY_UP => {
+            const down = ev.type == .KEY_DOWN;
+            switch (ev.key_code) {
+                .W => w_down = down,
+                .S => s_down = down,
+                .A => a_down = down,
+                .D => d_down = down,
+                else => {},
+            }
+        },
+        else => {},
     }
 }
 
