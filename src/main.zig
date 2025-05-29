@@ -20,12 +20,9 @@ const Vertex = extern struct {
     color: u32,
 };
 
-const Square = [4]Vertex;
-
 const state = struct {
     var cam_vel = vec.zero(3);
     var cam_pos = vec.new(.{ 0.0, 0.0, 6.0 });
-    var plane: [10 * 10]Square = undefined;
 };
 
 export fn init() void {
@@ -34,54 +31,37 @@ export fn init() void {
         .logger = .{ .func = sokol.log.func },
     });
 
-    // this all is goofy
-    // it shouldnt be squares just points on which we draw triangles and index them
-
-    for (0..10) |z| {
-        for (0..10) |x| {
-            const off_x = 2.0 * @as(f32, @floatFromInt(x));
-            const off_z = 2.0 * @as(f32, @floatFromInt(z));
-            state.plane[z * 10 + x] = .{
-                .{ .x = -1.0 + off_x, .y = 0.0, .z = 1.0 + off_z, .color = 0xFF0000FF },
-                .{ .x = 1.0 + off_x, .y = 0.0, .z = 1.0 + off_z, .color = 0xFF00FF00 },
-                .{ .x = -1.0 + off_x, .y = 0.0, .z = -1.0 + off_z, .color = 0xFFFF0000 },
-                .{ .x = 1.0 + off_x, .y = 0.0, .z = -1.0 + off_z, .color = 0xFF000000 },
-            };
-        }
-    }
-
-    var indxs: [100 * 6]u16 = undefined;
-    for (0..100) |i| {
-        const idx = i * 6;
-        indxs[idx + 0] = @intCast(i * 4 + 0);
-        indxs[idx + 1] = @intCast(i * 4 + 2);
-        indxs[idx + 2] = @intCast(i * 4 + 1);
-        indxs[idx + 3] = @intCast(i * 4 + 2);
-        indxs[idx + 4] = @intCast(i * 4 + 3);
-        indxs[idx + 5] = @intCast(i * 4 + 1);
-    }
-
     bind.vertex_buffers[0] = gfx.makeBuffer(.{
-        .usage = .{ .stream_update = true },
-        .size = state.plane.len * @sizeOf(Square),
+        .data = gfx.asRange(&[_]Vertex{
+            .{ .x = 0.0, .y = 0.0, .z = 0.0, .color = 0xFF0000FF },
+            .{ .x = 1.0, .y = 0.0, .z = 0.0, .color = 0xFF00FF00 },
+            .{ .x = 2.0, .y = 0.0, .z = 0.0, .color = 0xFFFF0000 },
+
+            .{ .x = 0.0, .y = 1.0, .z = 0.0, .color = 0xFF0000FF },
+            .{ .x = 1.0, .y = 1.0, .z = 0.0, .color = 0xFF00FF00 },
+            .{ .x = 2.0, .y = 1.0, .z = 0.0, .color = 0xFFFF0000 },
+
+            .{ .x = 0.0, .y = 2.0, .z = 0.0, .color = 0xFF0000FF },
+            .{ .x = 1.0, .y = 2.0, .z = 0.0, .color = 0xFF00FF00 },
+            .{ .x = 2.0, .y = 2.0, .z = 0.0, .color = 0xFFFF0000 },
+        })
     });
 
     bind.index_buffer = gfx.makeBuffer(.{
         .usage = .{ .index_buffer = true },
-        .data = gfx.asRange(&indxs),
-        //.data = gfx.asRange(&[_]u16{ // CW
-            //0,  2,  1,
-            //2,  3,  1,
+        .data = gfx.asRange(&[_]u16{ // CW
+            4, 0, 3,
+            4, 1, 0,
 
-            //4,  6,  5,
-            //6,  7,  5,
+            5, 1, 4,
+            5, 2, 1,
 
-            //8,  10, 9,
-            //10, 11, 9,
+            7, 3, 6,
+            7, 4, 3,
 
-            //12, 14, 13,
-            //14, 15, 13,
-        //}),
+            8, 4, 7,
+            8, 5, 4,
+        }),
     });
 
     pipe = gfx.makePipeline(.{
@@ -170,15 +150,13 @@ export fn frame() void {
         .{ 1.0, 0.0, 0.0, 0.0 },
         .{ 0.0, 1.0, 0.0, 0.0 },
         .{ 0.0, 0.0, 1.0, 0.0 },
-        .{ 0.0, -2.0, 0.0, 1.0 },
+        .{ -1.0, -1.0, 0.0, 1.0 },
     } };
-
-    gfx.updateBuffer(bind.vertex_buffers[0], gfx.asRange(&state.plane));
 
     gfx.applyPipeline(pipe);
     gfx.applyBindings(bind);
     gfx.applyUniforms(shader.UB_vs_params, gfx.asRange(&params));
-    gfx.draw(0, state.plane.len * @sizeOf(Square), 1);
+    gfx.draw(0, 24, 1);
 }
 
 export fn cleanup() void {
