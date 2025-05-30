@@ -2,6 +2,7 @@ const std = @import("std");
 const math = std.math;
 const sokol = @import("sokol");
 const shader = @import("shaders/shader.glsl.zig");
+const fastnoise = @import("fastnoise.zig");
 const vec = @import("vec.zig");
 const mat = @import("mat.zig");
 const quat = @import("quat.zig");
@@ -9,6 +10,18 @@ const quat = @import("quat.zig");
 const gfx = sokol.gfx;
 const app = sokol.app;
 const glue = sokol.glue;
+
+const noise = fastnoise.Noise(f32){
+    .seed = 1337,
+    .noise_type = .cellular,
+    .frequency = 0.25,
+    .gain = 0.40,
+    .fractal_type = .fbm,
+    .lacunarity = 0.40,
+    .cellular_distance = .euclidean,
+    .cellular_return = .distance2,
+    .cellular_jitter_mod = 0.88,
+};
 
 var bind = gfx.Bindings{};
 var pipe = gfx.Pipeline{};
@@ -22,7 +35,7 @@ const Vertex = extern struct {
 
 const state = struct {
     var cam_vel = vec.zero(3);
-    var cam_pos = vec.new(.{ 0.0, 0.0, 6.0 });
+    var cam_pos = vec.new(.{ 5.0, 2.0, 0.0 });
 };
 
 export fn init() void {
@@ -31,37 +44,46 @@ export fn init() void {
         .logger = .{ .func = sokol.log.func },
     });
 
+    const dims = 10;
+    const dots = dims + 1;
+
+    var plane: [dots * dots]Vertex = undefined;
+    var indxs: [dims * dims * 6]u16 = undefined;
+
+    for (0..dots) |y| {
+        for (0..dots) |x| {
+            const fx: f32 = @floatFromInt(x);
+            const fy: f32 = @floatFromInt(y);
+            plane[y * dots + x] = .{ .x = fx, .y = fy, .z = noise.genNoise2D(fx, fy), .color = 0xFFFFFFFF };
+        }
+    }
+
+    for (0..dims) |y| {
+        for (0..dims) |x| {
+            const tl: u16 = @intCast(y * dots + x);
+            const tr: u16 = @intCast(y * dots + x + 1);
+            const bl: u16 = @intCast((y + 1) * dots + x);
+            const br: u16 = @intCast((y + 1) * dots + x + 1);
+
+            const i = (y * dims + x) * 6;
+
+            indxs[i + 0] = tl;
+            indxs[i + 1] = bl;
+            indxs[i + 2] = br;
+
+            indxs[i + 3] = tl;
+            indxs[i + 4] = br;
+            indxs[i + 5] = tr;
+        }
+    }
+
     bind.vertex_buffers[0] = gfx.makeBuffer(.{
-        .data = gfx.asRange(&[_]Vertex{
-            .{ .x = 0.0, .y = 0.0, .z = 0.0, .color = 0xFF0000FF },
-            .{ .x = 1.0, .y = 0.0, .z = 0.0, .color = 0xFF00FF00 },
-            .{ .x = 2.0, .y = 0.0, .z = 0.0, .color = 0xFFFF0000 },
-
-            .{ .x = 0.0, .y = 1.0, .z = 0.0, .color = 0xFF0000FF },
-            .{ .x = 1.0, .y = 1.0, .z = 0.0, .color = 0xFF00FF00 },
-            .{ .x = 2.0, .y = 1.0, .z = 0.0, .color = 0xFFFF0000 },
-
-            .{ .x = 0.0, .y = 2.0, .z = 0.0, .color = 0xFF0000FF },
-            .{ .x = 1.0, .y = 2.0, .z = 0.0, .color = 0xFF00FF00 },
-            .{ .x = 2.0, .y = 2.0, .z = 0.0, .color = 0xFFFF0000 },
-        })
+        .data = gfx.asRange(&plane),
     });
 
     bind.index_buffer = gfx.makeBuffer(.{
         .usage = .{ .index_buffer = true },
-        .data = gfx.asRange(&[_]u16{ // CW
-            4, 0, 3,
-            4, 1, 0,
-
-            5, 1, 4,
-            5, 2, 1,
-
-            7, 3, 6,
-            7, 4, 3,
-
-            8, 4, 7,
-            8, 5, 4,
-        }),
+        .data = gfx.asRange(&indxs),
     });
 
     pipe = gfx.makePipeline(.{
@@ -146,17 +168,17 @@ export fn frame() void {
     });
 
     const view_mat = mat.mul(quat.toMat(quat.inv(rotation)), translation);
-    const params = shader.VsParams{ .view_proj = mat.mul(proj_mat, view_mat).mat, .model = .{
-        .{ 1.0, 0.0, 0.0, 0.0 },
-        .{ 0.0, 1.0, 0.0, 0.0 },
-        .{ 0.0, 0.0, 1.0, 0.0 },
-        .{ -1.0, -1.0, 0.0, 1.0 },
-    } };
+    const model_mat = quat.toMat(quat.new(.{ @sin(math.pi * 0.25), 0.0, 0.0, @cos(math.pi * 0.25) }));
+
+    const params = shader.VsParams{
+        .view_proj = mat.mul(proj_mat, view_mat).mat,
+        .model = model_mat.mat,
+    };
 
     gfx.applyPipeline(pipe);
     gfx.applyBindings(bind);
     gfx.applyUniforms(shader.UB_vs_params, gfx.asRange(&params));
-    gfx.draw(0, 24, 1);
+    gfx.draw(0, 6 * 100_000, 1);
 }
 
 export fn cleanup() void {
