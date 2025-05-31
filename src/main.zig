@@ -6,6 +6,7 @@ const fastnoise = @import("fastnoise.zig");
 const vec = @import("vec.zig");
 const mat = @import("mat.zig");
 const quat = @import("quat.zig");
+const World = @import("game/World.zig");
 
 const gfx = sokol.gfx;
 const app = sokol.app;
@@ -35,8 +36,12 @@ const Vertex = extern struct {
 
 const state = struct {
     var cam_vel = vec.zero(3);
-    var cam_pos = vec.new(.{ 5.0, 2.0, 0.0 });
+    var cam_pos = vec.new(.{ 5.0, 3.0, 4.0 });
+    var world = World.init(.{ .seed = 0 });
 };
+
+const dims = 12;
+const dots = dims + 1;
 
 export fn init() void {
     gfx.setup(.{
@@ -44,46 +49,14 @@ export fn init() void {
         .logger = .{ .func = sokol.log.func },
     });
 
-    const dims = 10;
-    const dots = dims + 1;
-
-    var plane: [dots * dots]Vertex = undefined;
-    var indxs: [dims * dims * 6]u16 = undefined;
-
-    for (0..dots) |y| {
-        for (0..dots) |x| {
-            const fx: f32 = @floatFromInt(x);
-            const fy: f32 = @floatFromInt(y);
-            plane[y * dots + x] = .{ .x = fx, .y = fy, .z = noise.genNoise2D(fx, fy), .color = 0xFFFFFFFF };
-        }
-    }
-
-    for (0..dims) |y| {
-        for (0..dims) |x| {
-            const tl: u16 = @intCast(y * dots + x);
-            const tr: u16 = @intCast(y * dots + x + 1);
-            const bl: u16 = @intCast((y + 1) * dots + x);
-            const br: u16 = @intCast((y + 1) * dots + x + 1);
-
-            const i = (y * dims + x) * 6;
-
-            indxs[i + 0] = tl;
-            indxs[i + 1] = bl;
-            indxs[i + 2] = br;
-
-            indxs[i + 3] = tl;
-            indxs[i + 4] = br;
-            indxs[i + 5] = tr;
-        }
-    }
-
     bind.vertex_buffers[0] = gfx.makeBuffer(.{
-        .data = gfx.asRange(&plane),
+        .usage = .{ .stream_update = true },
+        .size = state.world.verticies.len * @sizeOf(Vertex),
     });
 
     bind.index_buffer = gfx.makeBuffer(.{
         .usage = .{ .index_buffer = true },
-        .data = gfx.asRange(&indxs),
+        .data = gfx.asRange(&state.world.indecies),
     });
 
     pipe = gfx.makePipeline(.{
@@ -164,7 +137,8 @@ export fn frame() void {
         .{ 1.0, 0.0, 0.0, 0.0 },
         .{ 0.0, 1.0, 0.0, 0.0 },
         .{ 0.0, 0.0, 1.0, 0.0 },
-        .{ -state.cam_pos[vec.x], -state.cam_pos[vec.y], -state.cam_pos[vec.z], 1.0 },
+        //.{ -state.cam_pos[vec.x], -state.cam_pos[vec.y], -state.cam_pos[vec.z], 1.0 },
+        .{ -6.0, -3.0, -4.0, 1.0 },
     });
 
     const view_mat = mat.mul(quat.toMat(quat.inv(rotation)), translation);
@@ -175,10 +149,13 @@ export fn frame() void {
         .model = model_mat.mat,
     };
 
+    state.world.update(state.cam_pos[vec.x], -state.cam_pos[vec.z]);
+    gfx.updateBuffer(bind.vertex_buffers[0], gfx.asRange(&state.world.verticies));
+
     gfx.applyPipeline(pipe);
     gfx.applyBindings(bind);
     gfx.applyUniforms(shader.UB_vs_params, gfx.asRange(&params));
-    gfx.draw(0, 6 * 100_000, 1);
+    gfx.draw(0, state.world.indecies.len, 1);
 }
 
 export fn cleanup() void {
@@ -197,8 +174,8 @@ export fn event(e: ?*const app.Event) void {
     const ev = e orelse return;
     switch (ev.type) {
         .MOUSE_MOVE => {
-            yaw += ev.mouse_dx * 0.002;
-            pitch = @max(@min(pitch + ev.mouse_dy * 0.002, math.degreesToRadians(90)), math.degreesToRadians(-90));
+            //yaw += ev.mouse_dx * 0.002;
+            //pitch = @max(@min(pitch + ev.mouse_dy * 0.002, math.degreesToRadians(90)), math.degreesToRadians(-90));
         },
         .MOUSE_ENTER => {
             app.lockMouse(true);
